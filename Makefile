@@ -3,6 +3,7 @@ VERSION ?= v0.2.0
 POSTGRES ?= 17
 IMAGE_NAME ?= mihado/postgres
 IMAGE_TAG ?= $(POSTGRES)
+CACHE ?= true
 
 # Base URL for downloads
 BASE_URL = https://github.com/pksunkara/pgx_ulid/releases/download/$(VERSION)
@@ -38,7 +39,9 @@ build: setup-buildx deps
 	@ARCH=$$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/'); \
 	if [ "$$ARCH" = "arm64" ]; then PLATFORM="linux/arm64/v8"; else PLATFORM="linux/$$ARCH"; fi; \
 	echo "Detected platform: $$PLATFORM"; \
-	docker buildx build --platform $$PLATFORM \
+	CACHE_FLAG=""; \
+	if [ "$(CACHE)" = "false" ]; then CACHE_FLAG="--no-cache"; fi; \
+	docker buildx build --progress=plain $$CACHE_FLAG --platform $$PLATFORM \
 		--build-arg POSTGRES_VERSION=$(POSTGRES) \
 		-t $(IMAGE_NAME):$(IMAGE_TAG) \
 		-t $(IMAGE_NAME):latest \
@@ -68,6 +71,7 @@ config:
 	@echo "  POSTGRES: $(POSTGRES)"
 	@echo "  IMAGE_NAME: $(IMAGE_NAME)"
 	@echo "  IMAGE_TAG: $(IMAGE_TAG)"
+	@echo "  CACHE: $(CACHE)"
 	@echo "  TMP_DIR: $(TMP_DIR)"
 
 .PHONY: deps clean build push setup-buildx config
