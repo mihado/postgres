@@ -1,15 +1,20 @@
-# Variables with defaults
+.PHONY: config clean setup-buildx deps build push pgx_ulid
+
 VERSION ?= v0.2.0
 POSTGRES ?= 17
 IMAGE_NAME ?= mihado/postgres
 IMAGE_TAG ?= $(POSTGRES)
 CACHE ?= true
-
-# Base URL for downloads
-BASE_URL = https://github.com/pksunkara/pgx_ulid/releases/download/$(VERSION)
-
-# Target directory
 TMP_DIR = ./tmp
+
+config:
+	@echo "Current configuration:"
+	@echo "  VERSION: $(VERSION)"
+	@echo "  POSTGRES: $(POSTGRES)"
+	@echo "  IMAGE_NAME: $(IMAGE_NAME)"
+	@echo "  IMAGE_TAG: $(IMAGE_TAG)"
+	@echo "  CACHE: $(CACHE)"
+	@echo "  TMP_DIR: $(TMP_DIR)"
 
 tmp:
 	mkdir -p $(TMP_DIR)
@@ -18,18 +23,6 @@ clean:
 	@rm -rf $(TMP_DIR)
 	@echo "Cleaned $(TMP_DIR)/"
 
-# Download both amd64 and arm64 extensions
-deps: tmp
-	@echo "Downloading pgx_ulid extensions..."
-	@echo "Version: $(VERSION)"
-	@echo "Postgres: $(POSTGRES)"
-	@echo "Downloading amd64 extension..."
-	@curl -L -o $(TMP_DIR)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-amd64-linux-gnu.deb \
-		$(BASE_URL)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-amd64-linux-gnu.deb
-	@echo "Downloading arm64 extension..."
-	@curl -L -o $(TMP_DIR)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-arm64-linux-gnu.deb \
-		$(BASE_URL)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-arm64-linux-gnu.deb
-	@echo "Downloads completed to $(TMP_DIR)/"
 
 # Build for local architecture (auto-detected)
 build: setup-buildx deps
@@ -39,13 +32,14 @@ build: setup-buildx deps
 	@ARCH=$$(uname -m | sed 's/x86_64/amd64/' | sed 's/aarch64/arm64/'); \
 	if [ "$$ARCH" = "arm64" ]; then PLATFORM="linux/arm64/v8"; else PLATFORM="linux/$$ARCH"; fi; \
 	echo "Detected platform: $$PLATFORM"; \
-	CACHE_FLAG=""; \
-	if [ "$(CACHE)" = "false" ]; then CACHE_FLAG="--no-cache"; fi; \
-	docker buildx build --progress=plain $$CACHE_FLAG --platform $$PLATFORM \
+	NO_CACHE=""; \
+	if [ "$(CACHE)" = "false" ]; then NO_CACHE="--no-cache"; fi; \
+	docker buildx build --progress=plain $$NO_CACHE --platform $$PLATFORM \
 		--build-arg POSTGRES_VERSION=$(POSTGRES) \
 		-t $(IMAGE_NAME):$(IMAGE_TAG) \
 		-t $(IMAGE_NAME):latest \
 		--load .
+
 
 # Build multiarch image then push to registry
 push: setup-buildx deps
@@ -58,6 +52,7 @@ push: setup-buildx deps
 		-t $(IMAGE_NAME):latest \
 		--push .
 
+
 # Create and use buildx builder if not exists
 setup-buildx:
 	@echo "Setting up Docker buildx..."
@@ -65,13 +60,20 @@ setup-buildx:
 		docker buildx use multiarch 2>/dev/null || \
 		echo "Buildx already configured"
 
-config:
-	@echo "Current configuration:"
-	@echo "  VERSION: $(VERSION)"
-	@echo "  POSTGRES: $(POSTGRES)"
-	@echo "  IMAGE_NAME: $(IMAGE_NAME)"
-	@echo "  IMAGE_TAG: $(IMAGE_TAG)"
-	@echo "  CACHE: $(CACHE)"
-	@echo "  TMP_DIR: $(TMP_DIR)"
 
-.PHONY: deps clean build push setup-buildx config
+# Dependencies
+
+deps: tmp pgx_ulid
+
+BASE_URL_PGX_ULID = https://github.com/pksunkara/pgx_ulid/releases/download/$(VERSION)
+pgx_ulid: tmp
+	@echo "Downloading pgx_ulid extensions..."
+	@echo "Version: $(VERSION)"
+	@echo "Postgres: $(POSTGRES)"
+	@echo "Downloading amd64 extension..."
+	@curl -L -o $(TMP_DIR)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-amd64-linux-gnu.deb \
+		$(BASE_URL_PGX_ULID)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-amd64-linux-gnu.deb
+	@echo "Downloading arm64 extension..."
+	@curl -L -o $(TMP_DIR)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-arm64-linux-gnu.deb \
+		$(BASE_URL_PGX_ULID)/pgx_ulid-$(VERSION)-pg$(POSTGRES)-arm64-linux-gnu.deb
+	@echo "Downloads completed to $(TMP_DIR)/"
